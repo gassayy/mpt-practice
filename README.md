@@ -161,11 +161,3 @@ cargo test test_insert_and_get
 - [Ethereum Wiki: Patricia Tree](https://eth.wiki/fundamentals/patricia-tree)
 - [Merkle Patricia Trie Specification](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/)
 
-## License
-
-This is a course project implementation for educational purposes.
-
-## Author
-
-Course Project Implementation - 2025
-

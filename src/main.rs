@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_basic_operations() {
-        let mut trie = MerklePatriciaTrie::new();
+        let mut trie: MerklePatriciaTrie = MerklePatriciaTrie::new();
         
         // Test insert and get
         trie.insert(b"key1", b"value1".to_vec());

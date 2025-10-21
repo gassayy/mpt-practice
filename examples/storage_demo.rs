@@ -93,5 +93,17 @@ fn main() {
     println!("• Nodes stored by their hash (content-addressed)");
     println!("• Root hash commits to entire tree state");
     println!("• Can verify specific keys with small proofs");
+    
+    println!("\n\n");
+    println!("═══════════════════════════════════════════════════════════════");
+    println!("VISUALIZATION: Tree Structure");
+    println!("═══════════════════════════════════════════════════════════════");
+    trie.print_tree();
+    
+    println!("\n\n");
+    println!("═══════════════════════════════════════════════════════════════");
+    println!("VISUALIZATION: Storage Details");
+    println!("═══════════════════════════════════════════════════════════════");
+    trie.print_storage();
 }
 

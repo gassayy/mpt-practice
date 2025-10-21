@@ -386,6 +386,200 @@ impl Default for MerklePatriciaTrie {
     }
 }
 
+impl MerklePatriciaTrie {
+    /// Pretty prints the entire trie structure as a tree
+    pub fn print_tree(&self) {
+        println!("╔═══════════════════════════════════════════════════════════════");
+        println!("║ Merkle Patricia Trie Structure");
+        println!("╠═══════════════════════════════════════════════════════════════");
+        println!("║ Root Hash: 0x{}", hex_truncated(&self.root));
+        println!("╚═══════════════════════════════════════════════════════════════\n");
+        
+        let empty_hash = keccak256(&[]);
+        if self.root == empty_hash {
+            println!("  (empty trie)");
+            return;
+        }
+        
+        self.print_node(self.root, "", true, "");
+    }
+    
+    /// Helper function to recursively print a node and its children
+    fn print_node(&self, node_hash: Hash, prefix: &str, is_last: bool, path_so_far: &str) {
+        let node = match self.get_node(node_hash) {
+            Some(n) => n,
+            None => {
+                println!("{}{}── [MISSING NODE]", prefix, if is_last { "└" } else { "├" });
+                return;
+            }
+        };
+        
+        let branch = if is_last { "└──" } else { "├──" };
+        let extension = if is_last { "    " } else { "│   " };
+        
+        match node {
+            Node::Empty => {
+                println!("{}{} Empty", prefix, branch);
+            }
+            
+            Node::Leaf(encoded_path, value) => {
+                let (nibbles, _) = compact_decode(&encoded_path);
+                let full_path = format!("{}{}", path_so_far, nibbles_to_hex(&nibbles));
+                let value_str = format_value(&value);
+                println!("{}{} Leaf", prefix, branch);
+                println!("{}{}   Path: {} → {}", prefix, extension, full_path, nibbles_to_hex(&nibbles));
+                println!("{}{}   Value: {}", prefix, extension, value_str);
+                println!("{}{}   Hash: 0x{}", prefix, extension, hex_truncated(&node_hash));
+            }
+            
+            Node::Extension(encoded_path, child_hash) => {
+                let (nibbles, _) = compact_decode(&encoded_path);
+                let new_path = format!("{}{}", path_so_far, nibbles_to_hex(&nibbles));
+                println!("{}{} Extension", prefix, branch);
+                println!("{}{}   Path: {}", prefix, extension, nibbles_to_hex(&nibbles));
+                println!("{}{}   Hash: 0x{}", prefix, extension, hex_truncated(&node_hash));
+                
+                let new_prefix = format!("{}{}", prefix, extension);
+                self.print_node(child_hash, &new_prefix, true, &new_path);
+            }
+            
+            Node::Branch(children, branch_value) => {
+                println!("{}{} Branch", prefix, branch);
+                if let Some(val) = branch_value {
+                    println!("{}{}   Value: {}", prefix, extension, format_value(&val));
+                }
+                println!("{}{}   Hash: 0x{}", prefix, extension, hex_truncated(&node_hash));
+                
+                // Count non-empty children
+                let non_empty: Vec<(usize, Hash)> = children
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, h)| h.map(|hash| (i, hash)))
+                    .collect();
+                
+                for (idx, (nibble, child_hash)) in non_empty.iter().enumerate() {
+                    let is_last_child = idx == non_empty.len() - 1;
+                    let new_path = format!("{}{:x}", path_so_far, nibble);
+                    let new_prefix = format!("{}{}   ", prefix, extension);
+                    
+                    println!("{}{}[{:x}]", new_prefix, if is_last_child { "└" } else { "├" }, nibble);
+                    let child_prefix = format!("{}{}   ", new_prefix, if is_last_child { " " } else { "│" });
+                    self.print_node(*child_hash, &child_prefix, true, &new_path);
+                }
+            }
+        }
+    }
+    
+    /// Prints all nodes in storage with their details
+    pub fn print_storage(&self) {
+        println!("╔═══════════════════════════════════════════════════════════════");
+        println!("║ Trie Storage Contents");
+        println!("╠═══════════════════════════════════════════════════════════════");
+        println!("║ Total nodes: {}", self.storage.len());
+        println!("║ Root hash: 0x{}", hex_truncated(&self.root));
+        println!("╚═══════════════════════════════════════════════════════════════\n");
+        
+        if self.storage.is_empty() {
+            println!("  (no nodes in storage)");
+            return;
+        }
+        
+        for (idx, (hash, node)) in self.storage.iter().enumerate() {
+            println!("Node #{}", idx + 1);
+            println!("  Hash: 0x{}", hex_full(hash));
+            
+            match node {
+                Node::Empty => {
+                    println!("  Type: Empty");
+                }
+                Node::Leaf(encoded_path, value) => {
+                    let (nibbles, _) = compact_decode(encoded_path);
+                    println!("  Type: Leaf");
+                    println!("  Path (nibbles): {}", nibbles_to_hex(&nibbles));
+                    println!("  Path (encoded): 0x{}", hex_bytes(encoded_path));
+                    println!("  Value: {}", format_value(value));
+                }
+                Node::Extension(encoded_path, child_hash) => {
+                    let (nibbles, _) = compact_decode(encoded_path);
+                    println!("  Type: Extension");
+                    println!("  Path (nibbles): {}", nibbles_to_hex(&nibbles));
+                    println!("  Path (encoded): 0x{}", hex_bytes(encoded_path));
+                    println!("  Child: 0x{}", hex_truncated(child_hash));
+                }
+                Node::Branch(children, branch_value) => {
+                    println!("  Type: Branch");
+                    if let Some(val) = branch_value {
+                        println!("  Branch value: {}", format_value(val));
+                    }
+                    let non_empty: Vec<usize> = children
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, h)| if h.is_some() { Some(i) } else { None })
+                        .collect();
+                    println!("  Children: [{}]", 
+                        non_empty.iter()
+                            .map(|i| format!("{:x}", i))
+                            .collect::<Vec<_>>()
+                            .join(", "));
+                    
+                    for (i, child_hash) in children.iter().enumerate() {
+                        if let Some(hash) = child_hash {
+                            println!("    [{:x}] → 0x{}", i, hex_truncated(hash));
+                        }
+                    }
+                }
+            }
+            println!();
+        }
+    }
+}
+
+// Helper functions for formatting
+
+/// Converts nibbles to hex string representation
+fn nibbles_to_hex(nibbles: &[u8]) -> String {
+    if nibbles.is_empty() {
+        return String::from("(empty)");
+    }
+    nibbles.iter()
+        .map(|n| format!("{:x}", n))
+        .collect::<String>()
+}
+
+/// Formats a value for display (shows as string if printable, otherwise as hex)
+fn format_value(value: &[u8]) -> String {
+    // Try to display as UTF-8 string if it's valid
+    if let Ok(s) = std::str::from_utf8(value) {
+        if s.chars().all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace()) {
+            return format!("\"{}\"", s);
+        }
+    }
+    // Otherwise show as hex
+    format!("0x{}", hex_bytes(value))
+}
+
+/// Converts bytes to hex string
+fn hex_bytes(bytes: &[u8]) -> String {
+    bytes.iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>()
+}
+
+/// Converts hash to truncated hex string (first 8 chars)
+fn hex_truncated(hash: &Hash) -> String {
+    let full = hex_bytes(hash);
+    if full.len() > 16 {
+        format!("{}...{}", &full[..8], &full[full.len()-8..])
+    } else {
+        full
+    }
+}
+
+/// Converts hash to full hex string
+fn hex_full(hash: &Hash) -> String {
+    hex_bytes(hash)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

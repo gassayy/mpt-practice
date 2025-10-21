@@ -128,8 +128,8 @@ Root = Hash₁
                         ↓
                     Branch (Hash₂)
                    ┌────┴────┐
-           Index 6 │         │ No index 7
-           (for "e")│         │ (value="puppy" stored here)
+           Index 6 │         │ 
+           (for "e")│        │ value="puppy" stored here
                    ↓         ↓
               Leaf (Hash₃)   "dog" ends here
               path: [6,5]    
